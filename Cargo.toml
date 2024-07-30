@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.0.0"
+tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0.130", features = ["derive"] }
 chrono = "0.4.19"
 log = "0.4.14"
@@ -15,7 +16,8 @@ reqwest = { version = "0.11.4", features = ["blocking", "json"] }
 hdf5 = "0.8.1"
 rusqlite = "0.27.0"
 rayon = "1.5.1"
-tuf = "0.3.0-beta9
+tuf = "0.3.0-beta9"
+ring = "0.16.20"
 url = "2.2.2"
 tempfile = "3.3.0"
 
