@@ -1,0 +1,13 @@
+{
+    "custom": {
+      "architecture": "arm64",
+      "os": "raspberry_pi_os",
+      "ram": "512mb"
+    },
+    "description": "OpenFlowServer",
+    "hashes": {
+      "sha256": "${GITHUB_RELEASE_ASSET_SHA256}"
+    },
+    "length": "${GITHUB_RELEASE_ASSET_SIZE}",
+    "version": "v0.1"
+  }

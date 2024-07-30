@@ -1,0 +1,8 @@
+{
+    "meta": {
+      "snapshot.json": {
+        "version": "${GITHUB_REF##*/}"
+      }
+    },
+    "timestamp": "${TIMESTAMP}"
+  }

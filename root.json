@@ -1,0 +1,36 @@
+{
+    "keys": {
+      "snapshot_key": {
+        "keytype": "rsa",
+        "keyval": {
+          "public": ""
+        }
+      },
+      "target_key": {
+        "keytype": "rsa",
+        "keyval": {
+          "public": ""
+        }
+      },
+      "timestamp_key": {
+        "keytype": "rsa",
+        "keyval": {
+          "public": ""
+        }
+      }
+    },
+    "roles": {
+      "snapshot": {
+        "keyids": ["snapshot_key"],
+        "threshold": 1
+      },
+      "target": {
+        "keyids": ["target_key"],
+        "threshold": 1
+      },
+      "timestamp": {
+        "keyids": ["timestamp_key"],
+        "threshold": 1
+      }
+    }
+  }

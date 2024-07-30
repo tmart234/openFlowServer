@@ -1,0 +1,56 @@
+name: Update TUF metadata
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build and package OpenFlowServer
+        run: |
+          cargo build --release
+          tar -czf OpenFlowServer.tar.gz target/release/OpenFlowServer
+
+      - name: Create GitHub Release
+        uses: softprops/gotta-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: true
+          prerelease: false
+          title: "Release v${GITHUB_REF##*/}"
+          body: "Automated release"
+          artifact: OpenFlowServer.tar.gz
+
+      - name: Get hash and length of OpenFlowServer binary
+        run: |
+          GITHUB_RELEASE_ASSET_SHA256=$(sha256sum OpenFlowServer.tar.gz | cut -d' ' -f1)
+          GITHUB_RELEASE_ASSET_SIZE=$(stat -c%s OpenFlowServer.tar.gz)
+          echo "GITHUB_RELEASE_ASSET_SHA256=$GITHUB_RELEASE_ASSET_SHA256" >> $GITHUB_ENV
+          echo "GITHUB_RELEASE_ASSET_SIZE=$GITHUB_RELEASE_ASSET_SIZE" >> $GITHUB_ENV
+
+      - name: Update TUF metadata
+        run: |
+          # Update targets/openflowserver.json and snapshots/v0.1.json with hash and length
+          sed -i "s/\${GITHUB_RELEASE_ASSET_SHA256}/$GITHUB_RELEASE_ASSET_SHA256/" targets/openflowserver.json
+          sed -i "s/\${GITHUB_RELEASE_ASSET_SIZE}/$GITHUB_RELEASE_ASSET_SIZE/" targets/openflowserver.json
+          sed -i "s/v0.1/$GITHUB_REF##*/" snapshots/v0.1.json
+          sed -i "s/\${GITHUB_RELEASE_ASSET_SHA256}/$GITHUB_RELEASE_ASSET_SHA256/" snapshots/v0.1.json
+          sed -i "s/\${GITHUB_RELEASE_ASSET_SIZE}/$GITHUB_RELEASE_ASSET_SIZE/" snapshots/v0.1.json
+
+          # Update timestamp.json with current timestamp
+          TIMESTAMP=$(date +%s)
+          sed -i "s/1643723900/$TIMESTAMP/" timestamp.json
+
+      - name: Commit and push updated TUF metadata
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add .
+          git commit -m "Update TUF metadata"
+          git push origin main

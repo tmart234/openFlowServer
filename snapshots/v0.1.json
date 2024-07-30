@@ -1,0 +1,18 @@
+{
+    "meta": {
+      "openflowserver.json": {
+        "version": "${GITHUB_REF##*/}"
+      }
+    },
+    "snapshot": {
+      "targets": {
+        "openflowserver": {
+          "hashes": {
+            "sha256": "${GITHUB_RELEASE_ASSET_SHA256}"
+          },
+          "length": "${GITHUB_RELEASE_ASSET_SIZE}"
+        }
+      }
+    },
+    "version": "${GITHUB_REF##*/}"
+  }
