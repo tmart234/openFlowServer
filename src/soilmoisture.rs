@@ -5,10 +5,11 @@ use std::sync::{Mutex, Arc};
 use log::{info, error};
 use env_logger::Env;
 use thiserror::Error;
-use governor::{state::DashMap, RateLimiter, Quota};
+use governor::{RateLimiter, Quota};
+use dashmap::DashMap;
 use std::num::NonZeroU32;
 use reqwest;
-use hdf5::{File, types::Array};
+use hdf5::{File, types::DynValue};
 use std::time::Duration;
 use tokio::time;
 use tempfile::NamedTempFile;
@@ -19,11 +20,6 @@ use rusqlite::{ToSql, types::ToSqlOutput};
 use rayon::prelude::*;
 use tuf::crypto::KeyId;
 use tuf::client::{Client, Config};
-use tuf::metadata::{RootMetadata, SignedMetadata, Role, MetadataPath, MetadataVersion};
-use tuf::interchange::DataInterchange;
-use tuf::repository::{FileSystemRepository, HttpRepository};
-use url::Url;
-use reqwest::blocking::Client as HttpClient;
 
 // Define error types
 #[derive(Error, Debug)]
