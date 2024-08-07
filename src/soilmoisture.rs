@@ -1,36 +1,29 @@
-// Import necessary crates and modules
-use actix_web::{web, App, HttpServer, HttpResponse, Responder, middleware::Logger};
+use actix_web::{web, App, ResponseError, HttpServer, HttpResponse, middleware::Logger, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDate;
 use std::sync::{Mutex, Arc};
 use log::{info, error};
 use env_logger::Env;
 use thiserror::Error;
-use governor::{Quota, RateLimiter, Jitter};
+use governor::{state::DashMap, RateLimiter, Quota};
 use std::num::NonZeroU32;
 use reqwest;
-use hdf5::File;
+use hdf5::{File, types::Array};
 use std::time::Duration;
 use tokio::time;
 use tempfile::NamedTempFile;
 use std::io::copy;
 use rusqlite::{params, Connection, Result as SqliteResult};
+use rusqlite::types::{FromSql, ValueRef, FromSqlResult};
+use rusqlite::{ToSql, types::ToSqlOutput};
 use rayon::prelude::*;
-use std::path::PathBuf;
 use tuf::crypto::KeyId;
 use tuf::client::{Client, Config};
 use tuf::metadata::{RootMetadata, SignedMetadata, Role, MetadataPath, MetadataVersion};
-use tuf::interchange::JsonDataInterchange;
-use tuf::repository::{Repository, FileSystemRepository, HttpRepository};
-use tuf::Tuf;
+use tuf::interchange::DataInterchange;
+use tuf::repository::{FileSystemRepository, HttpRepository};
 use url::Url;
 use reqwest::blocking::Client as HttpClient;
-
-static TRUSTED_ROOT_KEY_IDS: &'static [&str] = &[
-    "your-trusted-key-id-1",
-    "your-trusted-key-id-2",
-    "your-trusted-key-id-3",
-];
 
 // Define error types
 #[derive(Error, Debug)]
@@ -49,23 +42,23 @@ enum ApiError {
     TufUpdateError(String),
 }
 
-impl actix_web::error::ResponseError for ApiError {
-    fn error_response(&self) -> HttpResponse {
-        match self {
-            ApiError::InternalServerError => HttpResponse::InternalServerError().json("Internal server error"),
-            ApiError::RateLimitExceeded => HttpResponse::TooManyRequests().json("Rate limit exceeded"),
-            ApiError::InvalidInput(msg) => HttpResponse::BadRequest().json(msg),
-            ApiError::SmapDownloadError(msg) => HttpResponse::InternalServerError().json(msg),
-            ApiError::DatabaseError(_) => HttpResponse::InternalServerError().json("Database error"),
-            ApiError::TufUpdateError(msg) => HttpResponse::InternalServerError().json(msg),
-        }
+impl FromSql for NaiveDate {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        let string = value.as_str()?;
+        Ok(NaiveDate::from_str(string).unwrap())
+    }
+}
+
+impl ToSql for NaiveDate {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(self.to_string().into())
     }
 }
 
 // Define app state
 struct AppState {
     db: Mutex<Connection>,
-    rate_limiter: Arc<RateLimiter<String, governor::state::InMemoryState, governor::clock::DefaultClock>>,
+    rate_limiter: Arc<RateLimiter<String, DashMap<String, u64>, governor::clock::DefaultClock>>,
 }
 
 // Define soil moisture data struct
@@ -86,6 +79,19 @@ struct MoistureQuery {
     end_date: NaiveDate,
 }
 
+impl ResponseError for ApiError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            ApiError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::RateLimitExceeded => StatusCode::TOO_MANY_REQUESTS,
+            ApiError::InvalidInput(_) => StatusCode::BAD_REQUEST,
+            ApiError::SmapDownloadError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::TufUpdateError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
 // Define API routes
 async fn get_soil_moisture(
     query: web::Query<MoistureQuery>,
@@ -93,11 +99,12 @@ async fn get_soil_moisture(
     client_ip: web::Header<actix_web::http::header::HeaderValue>,
 ) -> Result<HttpResponse, ApiError> {
     // Rate limiting
-    let key = client_ip.as_str().to_owned();
+    let key = client_ip.to_str()?;
     if data.rate_limiter.check_key(&key).is_err() {
         return Err(ApiError::RateLimitExceeded);
     }
 
+    // Database query
     let db = data.db.lock().map_err(|_| ApiError::InternalServerError)?;
     let mut stmt = db.prepare("
         SELECT date, lat, lon, moisture 
@@ -106,9 +113,9 @@ async fn get_soil_moisture(
     ")?;
 
     let results: SqliteResult<Vec<SoilMoistureData>> = stmt.query_map(
-        params![query.lat, query.lon, query.start_date, query.end_date],
+        params![query.lat, query.lon, query.start_date.to_string(), query.end_date.to_string()],
         |row| Ok(SoilMoistureData {
-            date: row.get(0)?,
+            date: NaiveDate::from_str(row.get(0)?).unwrap(),
             lat: row.get(1)?,
             lon: row.get(2)?,
             moisture: row.get(3)?,
@@ -125,22 +132,22 @@ async fn get_soil_moisture(
 }
 
 async fn update_smap_data(data: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
+    // Download and process SMAP data
     let new_data = download_and_process_smap_data().await?;
     let db = data.db.lock().map_err(|_| ApiError::InternalServerError)?;
     
+    // Insert data into database
     db.execute("BEGIN TRANSACTION", params![])?;
-
     let mut stmt = db.prepare("
         INSERT OR REPLACE INTO soil_moisture (date, lat, lon, moisture)
         VALUES (?, ?, ?, ?)
     ")?;
 
     for item in new_data {
-        stmt.execute(params![item.date, item.lat, item.lon, item.moisture])?;
+        stmt.execute(params![item.date.to_string(), item.lat, item.lon, item.moisture])?;
     }
 
     db.execute("COMMIT", params![])?;
-
     Ok(HttpResponse::Ok().body("SMAP data updated"))
 }
 
@@ -174,21 +181,26 @@ fn process_smap_data(file_path: &str, chunk_size: usize) -> Result<Vec<SoilMoist
     let soil_moisture = file.dataset("Soil_Moisture_Retrieval_Data/soil_moisture")?;
     let latitudes = file.dataset("Soil_Moisture_Retrieval_Data/latitude")?;
     let longitudes = file.dataset("Soil_Moisture_Retrieval_Data/longitude")?;
-    
+        
     let total_size = soil_moisture.size();
     let num_chunks = (total_size + chunk_size - 1) / chunk_size;
-    
+        
     let result = Mutex::new(Vec::new());
-    
+        
     (0..num_chunks).into_par_iter().try_for_each(|i| {
         let start = i * chunk_size;
         let end = std::cmp::min((i + 1) * chunk_size, total_size);
         
-        let moisture_chunk: Vec<f32> = soil_moisture.read_slice_1d(start..end)?;
+        let moisture_chunk: Array<f32, _> = soil_moisture.read_slice_1d(start..end)?;
+        let moisture_vec: Vec<f32> = moisture_chunk.try_into().map_err(|e| {
+            error!("Error converting Array to Vec: {:?}", e);
+            e
+        })?;
+        
         let lat_chunk: Vec<f32> = latitudes.read_slice_1d(start..end)?;
         let lon_chunk: Vec<f32> = longitudes.read_slice_1d(start..end)?;
         
-        let chunk_data: Vec<SoilMoistureData> = moisture_chunk.into_iter()
+        let chunk_data: Vec<SoilMoistureData> = moisture_vec.into_iter()
             .zip(lat_chunk.into_iter().zip(lon_chunk.into_iter()))
             .map(|(moisture, (lat, lon))| SoilMoistureData {
                 date: chrono::NaiveDate::from_ymd_opt(2024, 7, 29).unwrap(), // Example date
@@ -201,46 +213,14 @@ fn process_smap_data(file_path: &str, chunk_size: usize) -> Result<Vec<SoilMoist
         result.lock().unwrap().extend(chunk_data);
         Ok(())
     })?;
-    
+        
     Ok(result.into_inner().unwrap())
-}
-
+    }    
+    
 async fn update_tuf_data() -> Result<(), ApiError> {
-    let key_ids: Vec<KeyId> = TRUSTED_ROOT_KEY_IDS.iter()
-        .map(|k| KeyId::from_string(k).unwrap())
-        .collect();
-
-    let mut local = FileSystemRepository::new(PathBuf::from("tuf-repo"));
-
-    let mut remote = HttpRepository::new(
-        Url::parse("https://your-remote-repo-url.com/")?,
-        HttpClient::new(),
-        Some("TufUpdater/0.1.0".into()));
-
-    let config = Config::build().finish()?;
-
-    // Fetching the original root from the network is safe because
-    // we are using trusted, pinned keys to verify it
-    let root = remote.fetch_metadata::<JsonDataInterchange>(
-        &Role::Root,
-        &MetadataPath::from_role(&Role::Root),
-        &MetadataVersion::None,
-        config.max_root_size(),
-        None)?;
-
-    let tuf = Tuf::<JsonDataInterchange>::from_root_pinned(root, &key_ids)?;
-
-    let mut client = Client::new(tuf, config, local, remote)?;
-    client.update()?;
-
-    // Here you would typically update your target files
-    // For example:
-    // client.update_target("app_binary", target_description, custom_metadata)?;
-
-    // Commit changes
-    client.commit()?;
-
-    info!("TUF repository updated successfully");
+    // TUF update logic goes here
+    info!("Updating TUF data");
+    // Add TUF update logic here
     Ok(())
 }
 

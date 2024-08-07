@@ -16,11 +16,15 @@ reqwest = { version = "0.11.4", features = ["blocking", "json"] }
 hdf5 = "0.8.1"
 rusqlite = "0.27.0"
 rayon = "1.5.1"
-tuf = "0.3.0-beta9"
+tuf = "0.3.0-beta12"
 ring = "0.16.20"
 url = "2.2.2"
 tempfile = "3.3.0"
+dashmap = "6.0.1"
 
 [[bin]]
 name = "soil_moisture_api"
 path = "src/soilmoisture.rs"
+
+[build]
+hdf5_dir = "C:\\HDF5"

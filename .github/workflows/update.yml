@@ -18,7 +18,7 @@ jobs:
           tar -czf OpenFlowServer.tar.gz target/release/OpenFlowServer
 
       - name: Create GitHub Release
-        uses: softprops/gotta-release@v2
+        uses: softprops/action-gh-release@v2.0.8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
