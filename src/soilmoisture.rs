@@ -6,6 +6,8 @@ use log::{info, error};
 use env_logger::Env;
 use thiserror::Error;
 use governor::{RateLimiter, Quota};
+use governor::clock::DefaultClock;
+use ndarray::Array;
 use dashmap::DashMap;
 use std::num::NonZeroU32;
 use reqwest;
@@ -18,7 +20,6 @@ use rusqlite::{params, Connection, Result as SqliteResult};
 use rusqlite::types::{FromSql, ValueRef, FromSqlResult};
 use rusqlite::{ToSql, types::ToSqlOutput};
 use rayon::prelude::*;
-use tuf::crypto::KeyId;
 use tuf::client::{Client, Config};
 
 // Define error types
@@ -41,20 +42,20 @@ enum ApiError {
 impl FromSql for NaiveDate {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let string = value.as_str()?;
-        Ok(NaiveDate::from_str(string).unwrap())
+        Ok(NaiveDate::parse_from_str(string, "%Y-%m-%d").unwrap())
     }
 }
 
 impl ToSql for NaiveDate {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(self.to_string().into())
+        Ok(self.format("%Y-%m-%d").to_string().into())
     }
 }
 
 // Define app state
 struct AppState {
     db: Mutex<Connection>,
-    rate_limiter: Arc<RateLimiter<String, DashMap<String, u64>, governor::clock::DefaultClock>>,
+    rate_limiter: Arc<RateLimiter<String, DashMap<String, u64>, DefaultClock>>,
 }
 
 // Define soil moisture data struct
@@ -88,7 +89,6 @@ impl ResponseError for ApiError {
     }
 }
 
-// Define API routes
 async fn get_soil_moisture(
     query: web::Query<MoistureQuery>,
     data: web::Data<AppState>,
@@ -109,9 +109,9 @@ async fn get_soil_moisture(
     ")?;
 
     let results: SqliteResult<Vec<SoilMoistureData>> = stmt.query_map(
-        params![query.lat, query.lon, query.start_date.to_string(), query.end_date.to_string()],
+        params![query.lat, query.lon, query.start_date.format("%Y-%m-%d").to_string(), query.end_date.format("%Y-%m-%d").to_string()],
         |row| Ok(SoilMoistureData {
-            date: NaiveDate::from_str(row.get(0)?).unwrap(),
+            date: NaiveDate::parse_from_str(row.get(0)?, "%Y-%m-%d").unwrap(),
             lat: row.get(1)?,
             lon: row.get(2)?,
             moisture: row.get(3)?,
@@ -140,7 +140,7 @@ async fn update_smap_data(data: web::Data<AppState>) -> Result<HttpResponse, Api
     ")?;
 
     for item in new_data {
-        stmt.execute(params![item.date.to_string(), item.lat, item.lon, item.moisture])?;
+        stmt.execute(params![item.date.format("%Y-%m-%d").to_string(), item.lat, item.lon, item.moisture])?;
     }
 
     db.execute("COMMIT", params![])?;
@@ -211,7 +211,7 @@ fn process_smap_data(file_path: &str, chunk_size: usize) -> Result<Vec<SoilMoist
     })?;
         
     Ok(result.into_inner().unwrap())
-    }    
+}
     
 async fn update_tuf_data() -> Result<(), ApiError> {
     // TUF update logic goes here
