@@ -28,7 +28,7 @@ jobs:
         
         cat << EOF > custom-stage/01-ansible-config/00-run-chroot.sh
         #!/bin/bash -e
-        ansible-playbook /ansible-playbook.yml
+        ansible-playbook /ansible/ansible-playbook.yml
         EOF
         
         chmod +x custom-stage/01-ansible-config/00-run-chroot.sh
