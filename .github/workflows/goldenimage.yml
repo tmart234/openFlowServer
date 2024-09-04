@@ -1,0 +1,87 @@
+name: Build Raspberry Pi Golden Image
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install Ansible
+      run: pip install ansible
+
+    - name: Prepare custom stage
+      run: |
+        mkdir -p custom-stage/01-ansible-config
+        cp ansible-playbook.yml custom-stage/01-ansible-config/00-ansible-playbook.yml
+        
+        cat << EOF > custom-stage/01-ansible-config/00-run-chroot.sh
+        #!/bin/bash -e
+        ansible-playbook /ansible-playbook.yml
+        EOF
+        
+        chmod +x custom-stage/01-ansible-config/00-run-chroot.sh
+        
+        cat << EOF > custom-stage/prerun.sh
+        #!/bin/bash -e
+        if [ ! -d "${ROOTFS_DIR}" ]; then
+          copy_previous
+        fi
+        EOF
+        
+        chmod +x custom-stage/prerun.sh
+
+    - name: Build Raspberry Pi Image
+      uses: usimd/pi-gen-action@v1
+      with:
+        image-name: custom-raspberrypi-image
+        stage-list: stage0 stage1 stage2 ./custom-stage
+        enable-ssh: 1
+        hostname: openflowserver
+        username: openflowuser
+        password: ${{ secrets.RPI_PASSWORD }}
+        locale: en_US.UTF-8
+        timezone: America/Denver
+        keyboard-keymap: us
+        keyboard-layout: English (US)
+        pi-gen-version: arm64
+        compression: zip
+        verbose-output: true
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: raspberry-pi-golden-image
+        path: ${{ steps.build.outputs.image-path }}
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.build.outputs.image-path }}
+        asset_name: custom-raspberrypi-image.zip
+        asset_content_type: application/zip

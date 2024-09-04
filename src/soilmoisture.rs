@@ -55,7 +55,7 @@ impl ToSql for NaiveDate {
 // Define app state
 struct AppState {
     db: Mutex<Connection>,
-    rate_limiter: Arc<RateLimiter<String, DashMap<String, u64>, DefaultClock>>,
+    rate_limiter: Arc<RateLimiter<String, InMemoryState, DefaultClock>>,
 }
 
 // Define soil moisture data struct
@@ -95,10 +95,7 @@ async fn get_soil_moisture(
     client_ip: web::Header<actix_web::http::header::HeaderValue>,
 ) -> Result<HttpResponse, ApiError> {
     // Rate limiting
-    let key = client_ip.to_str()?;
-    if data.rate_limiter.check_key(&key).is_err() {
-        return Err(ApiError::RateLimitExceeded);
-    }
+    let key = client_ip.to_str().map_err(|e| ApiError::InvalidInput(e.to_string()))?;
 
     // Database query
     let db = data.db.lock().map_err(|_| ApiError::InternalServerError)?;
@@ -188,10 +185,7 @@ fn process_smap_data(file_path: &str, chunk_size: usize) -> Result<Vec<SoilMoist
         let end = std::cmp::min((i + 1) * chunk_size, total_size);
         
         let moisture_chunk: Array<f32, _> = soil_moisture.read_slice_1d(start..end)?;
-        let moisture_vec: Vec<f32> = moisture_chunk.try_into().map_err(|e| {
-            error!("Error converting Array to Vec: {:?}", e);
-            e
-        })?;
+        let moisture_vec: Vec<f32> = moisture_chunk.iter().cloned().collect();
         
         let lat_chunk: Vec<f32> = latitudes.read_slice_1d(start..end)?;
         let lon_chunk: Vec<f32> = longitudes.read_slice_1d(start..end)?;
@@ -213,11 +207,11 @@ fn process_smap_data(file_path: &str, chunk_size: usize) -> Result<Vec<SoilMoist
     Ok(result.into_inner().unwrap())
 }
     
-async fn update_tuf_data() -> Result<(), ApiError> {
+async fn update_tuf_data() -> Result<HttpResponse, ApiError> {
     // TUF update logic goes here
     info!("Updating TUF data");
     // Add TUF update logic here
-    Ok(())
+    Ok(HttpResponse::Ok().body("TUF data updated"))
 }
 
 #[actix_web::main]
@@ -260,7 +254,6 @@ async fn main() -> std::io::Result<()> {
     });
 
     // Spawn a task to update TUF data daily
-    let app_state_clone = app_state.clone();
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(24 * 60 * 60));
         loop {
