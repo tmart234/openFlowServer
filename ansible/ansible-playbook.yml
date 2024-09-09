@@ -20,8 +20,8 @@
       cron:
         name: "Download data"
         minute: "0"
-        hour: "3"
-        job: "/usr/bin/python3 /user/share/OpenFlow/smap_download_script.py"
+        hour: "6"
+        job: "python ${CRON_SCRIPT_PATH}"
 
     - name: Configure API to start on boot
       systemd:
@@ -33,5 +33,5 @@
       cron:
         name: "TUF update check"
         minute: "0"
-        hour: "4"
+        hour: "6"
         job: "/usr/bin/python3 /user/share/OpenFlow/tuf_update_script.py"
