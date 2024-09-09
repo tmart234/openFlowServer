@@ -29,6 +29,8 @@ jobs:
         
         cat << EOF > custom-stage/01-ansible-config/00-run-chroot.sh
         #!/bin/bash -e
+        apt-get update
+        apt-get install -y ansible
         ansible-playbook /ansible/ansible-playbook.yml
         EOF
         
@@ -36,7 +38,7 @@ jobs:
         
         cat << EOF > custom-stage/prerun.sh
         #!/bin/bash -e
-        if [ ! -d "${ROOTFS_DIR}" ]; then
+        if [ ! -d "\${ROOTFS_DIR}" ]; then
           copy_previous
         fi
         EOF
