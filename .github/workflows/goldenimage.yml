@@ -22,36 +22,22 @@ jobs:
     - name: Install Ansible
       run: pip install ansible
 
-    - name: Prepare custom stage
+    - name: Create custom stage for cron job
       run: |
-        mkdir -p custom-stage/01-ansible-config
-        cp ansible/ansible-playbook.yml custom-stage/01-ansible-config/ansible-playbook.yml
-        
-        cat << EOF > custom-stage/01-ansible-config/00-run-chroot.sh
-        #!/bin/bash -e
-        apt-get update
-        apt-get install -y ansible
-        mkdir -p /ansible
-        cp /custom-stage/01-ansible-config/ansible-playbook.yml /ansible/ansible-playbook.yml
-        ansible-playbook /ansible/ansible-playbook.yml
+        mkdir -p cron-stage &&
+        {
+        cat > cron-stage/prerun.sh <<-EOF
+        #!/bin/bash
+        echo "0 0,12 * * * python ${CRON_SCRIPT_PATH}" >> /etc/cron.d/openflow_cron_job
         EOF
-        
-        chmod +x custom-stage/01-ansible-config/00-run-chroot.sh
-        
-        cat << EOF > custom-stage/prerun.sh
-        #!/bin/bash -e
-        if [ ! -d "\${ROOTFS_DIR}" ]; then
-          copy_previous
-        fi
-        EOF
-        
-        chmod +x custom-stage/prerun.sh
+        } &&
+        chmod +x cron-stage/prerun.sh
 
     - name: Build Raspberry Pi Image
       uses: usimd/pi-gen-action@v1.9.0
       with:
         image-name: custom-raspberrypi-image
-        stage-list: stage0 stage1 stage2 ./custom-stage
+        stage-list: stage0 stage1 stage2 ./cron-stage
         enable-ssh: 1
         hostname: openflowserver
         username: openflowuser
