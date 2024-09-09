@@ -22,16 +22,10 @@
         minute: "0"
         hour: "6"
         job: "python ${CRON_SCRIPT_PATH}"
+        memory: 256m
 
     - name: Configure API to start on boot
       systemd:
         name: OpenFlow_api_service
         enabled: yes
         state: started
-
-    - name: Set up TUF updater cron job
-      cron:
-        name: "TUF update check"
-        minute: "0"
-        hour: "6"
-        job: "/usr/bin/python3 /user/share/OpenFlow/tuf_update_script.py"
