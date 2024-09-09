@@ -16,15 +16,15 @@ jobs:
 
     - name: Prepare custom stage
       run: |
-        mkdir -p custom-stage/01-ansible-config
-        cp ${GITHUB_WORKSPACE}/ansible/ansible-playbook.yml ${GITHUB_WORKSPACE}/custom-stage/01-ansible-config/ansible-playbook.yml
+        mkdir -p ${ROOTFS_DIR}/custom-stage/01-ansible-config
+        cp ${GITHUB_WORKSPACE}/ansible/ansible-playbook.yml ${ROOTFS_DIR}/custom-stage/01-ansible-config/ansible-playbook.yml
 
         if [ $? -ne 0 ]; then
           echo "Error: File not copied!"
           exit 1
         fi
 
-        cat <<EOF > ${GITHUB_WORKSPACE}/custom-stage/01-ansible-config/00-run.sh
+        cat <<EOF > ${ROOTFS_DIR}/custom-stage/01-ansible-config/00-run.sh
         #!/bin/bash -e
         on_chroot <<INNER_EOF
           apt-get update
@@ -33,16 +33,16 @@ jobs:
         INNER_EOF
         EOF
 
-        chmod +x ${GITHUB_WORKSPACE}/custom-stage/01-ansible-config/00-run.sh
+        chmod +x ${ROOTFS_DIR}/custom-stage/01-ansible-config/00-run.sh
 
-        cat <<EOF > ${GITHUB_WORKSPACE}/custom-stage/prerun.sh
+        cat <<EOF > ${ROOTFS_DIR}/custom-stage/prerun.sh
         #!/bin/bash -e
         if [ ! -d "\${ROOTFS_DIR}" ]; then
           copy_previous
         fi
         EOF
 
-        chmod +x ${GITHUB_WORKSPACE}/custom-stage/prerun.sh
+        chmod +x ${ROOTFS_DIR}/custom-stage/prerun.sh
 
     - name: Build Raspberry Pi Image
       uses: usimd/pi-gen-action@v1.9.0
@@ -60,6 +60,7 @@ jobs:
         pi-gen-version: arm64
         compression: zip
         verbose-output: true
+      id: build
 
     - name: Create Release and Upload Asset
       uses: softprops/action-gh-release@v2
