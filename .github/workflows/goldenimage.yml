@@ -27,7 +27,7 @@ jobs:
     - name: Prepare custom stage
       run: |
         mkdir -p custom-stage/01-ansible-config
-        cp ansible-playbook.yml custom-stage/01-ansible-config/00-ansible-playbook.yml
+        cp ansible/ansible-playbook.yml custom-stage/01-ansible-config/00-ansible-playbook.yml
         
         cat << EOF > custom-stage/01-ansible-config/00-run-chroot.sh
         #!/bin/bash -e
