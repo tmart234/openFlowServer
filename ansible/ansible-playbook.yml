@@ -16,16 +16,16 @@
           - git
         state: present
 
-    - name: Set up cron job for data download
+    - name: Set up cron job for soil moisture data download
       cron:
         name: "Download data"
         minute: "0"
         hour: "3"
-        job: "/usr/bin/python3 /path/to/your/download_script.py"
+        job: "/usr/bin/python3 /user/share/OpenFlow/smap_download_script.py"
 
     - name: Configure API to start on boot
       systemd:
-        name: your_api_service
+        name: OpenFlow_api_service
         enabled: yes
         state: started
 
@@ -34,4 +34,4 @@
         name: "TUF update check"
         minute: "0"
         hour: "4"
-        job: "/usr/bin/python3 /path/to/your/tuf_update_script.py"
+        job: "/usr/bin/python3 /user/share/OpenFlow/tuf_update_script.py"

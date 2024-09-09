@@ -15,9 +15,9 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.x'
+        python-version: '3.9' 
 
     - name: Install Ansible
       run: pip install ansible
@@ -44,7 +44,7 @@ jobs:
         chmod +x custom-stage/prerun.sh
 
     - name: Build Raspberry Pi Image
-      uses: usimd/pi-gen-action@v1
+      uses: usimd/pi-gen-action@v1.9.0
       with:
         image-name: custom-raspberrypi-image
         stage-list: stage0 stage1 stage2 ./custom-stage
@@ -60,29 +60,7 @@ jobs:
         compression: zip
         verbose-output: true
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v2
+    - name: Create Release and Upload Asset
+      uses: softprops/action-gh-release@v2
       with:
-        name: raspberry-pi-golden-image
-        path: ${{ steps.build.outputs.image-path }}
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ steps.build.outputs.image-path }}
-        asset_name: custom-raspberrypi-image.zip
-        asset_content_type: application/zip
+        files: ${{ steps.build.outputs.image-path }}
