@@ -14,14 +14,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9' 
-
-    - name: Install Ansible
-      run: pip install ansible
-
     - name: Prepare custom stage
       run: |
         mkdir -p custom-stage/01-ansible-config
@@ -56,7 +48,7 @@ jobs:
       uses: usimd/pi-gen-action@v1.9.0
       with:
         image-name: custom-raspberrypi-image
-        stage-list: stage0 stage1 stage2 ${GITHUB_WORKSPACE}/custom-stage
+        stage-list: stage0 stage1 stage2 custom-stage
         enable-ssh: 1
         hostname: openflowserver
         username: openflowuser
