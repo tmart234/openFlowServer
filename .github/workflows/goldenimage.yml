@@ -32,18 +32,18 @@ jobs:
           exit 1
         fi
 
-        cat << EOF > ${GITHUB_WORKSPACE}/custom-stage/01-ansible-config/00-run.sh
+        cat <<EOF > ${GITHUB_WORKSPACE}/custom-stage/01-ansible-config/00-run.sh
         #!/bin/bash -e
-        on_chroot << EOF
+        on_chroot <<INNER_EOF
           apt-get update
           apt-get install -y ansible
           ansible-playbook /custom-stage/01-ansible-config/ansible-playbook.yml
-        EOF
+        INNER_EOF
         EOF
 
         chmod +x ${GITHUB_WORKSPACE}/custom-stage/01-ansible-config/00-run.sh
 
-        cat << EOF > ${GITHUB_WORKSPACE}/custom-stage/prerun.sh
+        cat <<EOF > ${GITHUB_WORKSPACE}/custom-stage/prerun.sh
         #!/bin/bash -e
         if [ ! -d "\${ROOTFS_DIR}" ]; then
           copy_previous
@@ -51,7 +51,7 @@ jobs:
         EOF
 
         chmod +x ${GITHUB_WORKSPACE}/custom-stage/prerun.sh
-    
+
     - name: Build Raspberry Pi Image
       uses: usimd/pi-gen-action@v1.9.0
       with:
