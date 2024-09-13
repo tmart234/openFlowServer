@@ -18,22 +18,42 @@ jobs:
 
     - name: Prepare custom stage
       run: |
-        mkdir -p custom-stage &&
+        mkdir -p custom-cron-stage &&
         {
-        cat > custom-stage/00-run-chroot.sh <<-EOF
-        #!/bin/bash
-        echo "*/5 * * * * ${SCRIPT_PATH}" >> /etc/crontab
-        EOF
+          cat > custom-cron-stage/00-run-chroot.sh << EOF
+          #!/bin/bash
+          set -e
+
+          # Add a cron job to run a script every day at midnight
+          echo "0 0 * * * root $SCRIPT_PATH" > /etc/cron.d/daily-task
+          # Create the script that will be run by the cron job
+          cat > /usr/local/bin/daily-task.sh << EOT
+          #!/bin/bash
+          echo "Daily task executed at \$(date)" >> /var/log/daily-task.log
+          EOT
+
+          # Make the script executable
+          chmod +x /usr/local/bin/daily-task.sh
+          EOF
+
+          # Make the script executable
+          chmod +x custom-cron-stage/00-run-chroot.sh
+
+          # Create the prerun.sh script
+          cat > custom-cron-stage/prerun.sh << EOF
+          #!/bin/bash -e
+          if [ ! -d "${ROOTFS_DIR}" ]; then
+            copy_previous
+          fi
+          EOF
         } &&
-        chmod +x custom-stage/00-run-chroot.sh &&
-        touch custom-stage/prerun.sh &&
-        ls -la custom-stage
+        chmod +x custom-cron-stage/prerun.sh
 
     - name: Build Raspberry Pi Image
       uses: usimd/pi-gen-action@v1.9.0
       with:
         image-name: custom-raspberrypi-image
-        stage-list: stage0 stage1 stage2 custom-stage
+        stage-list: stage0 stage1 stage2 ./custom-cron-stage
         enable-ssh: 1
         hostname: openflowserver
         username: openflowuser
@@ -45,9 +65,9 @@ jobs:
         pi-gen-version: arm64
         compression: zip
         verbose-output: true
-      id: build
 
-    - name: Create Release and Upload Asset
-      uses: softprops/action-gh-release@v2
+    - name: Upload image artifact
+      uses: actions/upload-artifact@v3
       with:
-        files: ${{ steps.build.outputs.image-path }}
+        name: custom-cron-raspios
+        path: ${{ steps.build.outputs.image-path }}
