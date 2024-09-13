@@ -7,42 +7,26 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+env:
+  SCRIPT_PATH: /usr/share/openflow/cronscript.sh
 
+jobs:
+  pi-gen:
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Prepare custom stage
       run: |
-        mkdir -p ${ROOTFS_DIR}/custom-stage/01-ansible-config
-        cp ${GITHUB_WORKSPACE}/ansible/ansible-playbook.yml ${ROOTFS_DIR}/custom-stage/01-ansible-config/ansible-playbook.yml
-
-        if [ $? -ne 0 ]; then
-          echo "Error: File not copied!"
-          exit 1
-        fi
-
-        cat <<EOF > ${ROOTFS_DIR}/custom-stage/01-ansible-config/00-run.sh
-        #!/bin/bash -e
-        on_chroot <<INNER_EOF
-          apt-get update
-          apt-get install -y ansible
-          ansible-playbook /custom-stage/01-ansible-config/ansible-playbook.yml
-        INNER_EOF
+        mkdir -p custom-stage &&
+        {
+        cat > custom-stage/00-run-chroot.sh <<-EOF
+        #!/bin/bash
+        echo "*/5 * * * * ${SCRIPT_PATH}" >> /etc/crontab
         EOF
-
-        chmod +x ${ROOTFS_DIR}/custom-stage/01-ansible-config/00-run.sh
-
-        cat <<EOF > ${ROOTFS_DIR}/custom-stage/prerun.sh
-        #!/bin/bash -e
-        if [ ! -d "\${ROOTFS_DIR}" ]; then
-          copy_previous
-        fi
-        EOF
-
-        chmod +x ${ROOTFS_DIR}/custom-stage/prerun.sh
+        } &&
+        chmod +x custom-stage/00-run-chroot.sh &&
+        touch custom-stage/prerun.sh
 
     - name: Build Raspberry Pi Image
       uses: usimd/pi-gen-action@v1.9.0
