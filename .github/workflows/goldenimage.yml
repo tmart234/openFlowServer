@@ -50,8 +50,9 @@ jobs:
 
     - name: Build Raspberry Pi Image
       uses: usimd/pi-gen-action@v1.9.0
+      id: build
       with:
-        image-name: custom-raspberrypi-image
+        image-name: openflow-server-image
         stage-list: stage0 stage1 stage2 ./custom-cron-stage
         enable-ssh: 1
         hostname: openflowserver
