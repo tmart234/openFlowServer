@@ -17,24 +17,21 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Prepare custom stage
-      env:
-        SCRIPT_PATH: /usr/share/openflow/cronscript.sh
       run: |
         mkdir -p custom-cron-stage
         cat > custom-cron-stage/00-run-chroot.sh << 'EOF'
         #!/bin/bash
         set -e
 
-        # Add a cron job to run a script every day at midnight
-        echo "0 0 * * * root ${SCRIPT_PATH}" > /etc/cron.d/daily-task
-        # Create the script that will be run by the cron job
-        cat > /usr/local/bin/daily-task.sh << 'EOT'
-        #!/bin/bash
-        echo "Daily task executed at $(date)" >> /var/log/daily-task.log
-        EOT
+        # Install Ansible
+        apt-get update
+        apt-get install -y ansible
 
-        # Make the script executable
-        chmod +x /usr/local/bin/daily-task.sh
+        # Copy Ansible playbook from the repository to the image
+        cp -r /ansible /root/ansible
+
+        # Run Ansible playbook
+        ansible-playbook /root/ansible/ansible-playbook.yml
         EOF
 
         chmod +x custom-cron-stage/00-run-chroot.sh
@@ -65,9 +62,12 @@ jobs:
         pi-gen-version: arm64
         compression: zip
         verbose-output: true
+        wpa-country: 'US'
+        wpa-essid: ${{ secrets.WPA_SSID }}
+        wpa-password: ${{ secrets.WPA_PASSWORD }}
 
     - name: Upload image artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4.4.0
       with:
         name: custom-cron-raspios
         path: ${{ steps.build.outputs.image-path }}
