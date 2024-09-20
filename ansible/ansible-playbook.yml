@@ -2,6 +2,11 @@
 - name: Configure Raspberry Pi Zero 2W
   hosts: raspberrypi
   become: yes
+  vars:
+    api_service_name: openflow_api_service
+    api_script_path: /usr/local/bin/openflow_api.py
+    cron_script_path: /usr/local/bin/openflow_cron.py
+    db_path: /var/lib/openflow/data.db
   tasks:
     - name: Update and upgrade apt packages
       apt:
@@ -14,18 +19,57 @@
           - python3
           - python3-pip
           - git
+          - sqlite3
         state: present
 
-    - name: Set up cron job for soil moisture data download
+    - name: Install required Python packages
+      pip:
+        name:
+          - bottle
+          - waitress
+          - aiohttp
+          - apscheduler
+
+    - name: Create directory for SQLite database
+      file:
+        path: /var/lib/openflow
+        state: directory
+        mode: '0755'
+    
+    - name: Set up SQLite database
+      command: sqlite3 {{ db_path }} "CREATE TABLE IF NOT EXISTS processed_data (date TEXT, location TEXT, smap_value REAL, vegdri_value REAL);"
+      args:
+        creates: "{{ db_path }}"
+
+    - name: Copy API script
+      copy:
+        src: scripts/openflow_api.py
+        dest: "{{ api_script_path }}"
+        mode: '0755'
+
+    - name: Copy cron script
+      copy:
+        src: scripts/openflow_cron.py
+        dest: "{{ cron_script_path }}"
+        mode: '0755'
+
+
+    - name: Set up cron job for data download (SMAP + Vegdri)
       cron:
         name: "Download data"
         minute: "0"
         hour: "6"
         job: "python ${CRON_SCRIPT_PATH}"
-        memory: 256m
-
+    
+    - name: Create systemd service file for API
+      template:
+        src: config/openflow_api.service.j2
+        dest: /etc/systemd/system/{{ api_service_name }}.service
+        mode: '0644'
+    
     - name: Configure API to start on boot
       systemd:
         name: OpenFlow_api_service
         enabled: yes
         state: started
+        daemon_reload: yes

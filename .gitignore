@@ -13,3 +13,7 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 *.db
+qemu/custom-cron-raspios.zip
+qemu/kernel8.img
+qemu/bcm2710-rpi-zero-2-w.dtb
+/qemu

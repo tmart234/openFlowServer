@@ -7,9 +7,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  SCRIPT_PATH: /usr/share/openflow/cronscript.sh
-
 jobs:
   pi-gen:
     runs-on: ubuntu-latest
@@ -18,8 +15,8 @@ jobs:
 
     - name: Prepare custom stage
       run: |
-        mkdir -p custom-cron-stage
-        cat > custom-cron-stage/00-run-chroot.sh << 'EOF'
+        mkdir -p custom-stage
+        cat > custom-stage/00-run-chroot.sh << 'EOF'
         #!/bin/bash
         set -e
 
@@ -28,29 +25,35 @@ jobs:
         apt-get install -y ansible
 
         # Copy Ansible playbook from the repository to the image
+        mkdir -p /root/ansible
         cp -r /ansible /root/ansible
 
         # Run Ansible playbook
         ansible-playbook /root/ansible/ansible-playbook.yml
         EOF
 
-        chmod +x custom-cron-stage/00-run-chroot.sh
+        chmod +x custom-stage/00-run-chroot.sh
 
-        cat > custom-cron-stage/prerun.sh << 'EOF'
+        cat > custom-stage/prerun.sh << 'EOF'
         #!/bin/bash -e
         if [ ! -d "${ROOTFS_DIR}" ]; then
           copy_previous
         fi
         EOF
 
-        chmod +x custom-cron-stage/prerun.sh
+        chmod +x custom-stage/prerun.sh
+
+        # Copy the Ansible playbook and related files to the custom stage
+        cp ansible-playbook.yml custom-stage/
+        cp -r scripts config custom-stage/
 
     - name: Build Raspberry Pi Image
       uses: usimd/pi-gen-action@v1.9.0
       id: build
       with:
         image-name: openflow-server-image
-        stage-list: stage0 stage1 stage2 ./custom-cron-stage
+        # stage 2 = Lite OS (console-based, no gui)
+        stage-list: stage0 stage1 stage2 ./custom-stage
         enable-ssh: 1
         hostname: openflowserver
         username: openflowuser
@@ -69,5 +72,5 @@ jobs:
     - name: Upload image artifact
       uses: actions/upload-artifact@v4.4.0
       with:
-        name: custom-cron-raspios
+        name: openflow-os
         path: ${{ steps.build.outputs.image-path }}

@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenFlow API Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 {{ api_script_path }}
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
