@@ -64,6 +64,10 @@ jobs:
         wpa-country: 'US'
         wpa-essid: ${{ secrets.WPA_SSID }}
         wpa-password: ${{ secrets.WPA_PASSWORD }}
+      env:
+        EARTHDATA_USERNAME: ${{ secrets.EARTHDATA_USERNAME }}
+        EARTHDATA_PASSWORD: ${{ secrets.EARTHDATA_PASSWORD }}
+  
 
     - name: Upload image artifact
       uses: actions/upload-artifact@v4.4.0
