@@ -24,12 +24,8 @@ jobs:
         apt-get update
         apt-get install -y ansible
 
-        # Copy Ansible playbook from the repository to the image
-        mkdir -p /root/ansible
-        cp -r /ansible /root/ansible
-
         # Run Ansible playbook
-        ansible-playbook /root/ansible/ansible-playbook.yml
+        ansible-playbook /pi-gen/custom-stage/ansible-playbook.yml
         EOF
 
         chmod +x custom-stage/00-run-chroot.sh
@@ -43,8 +39,8 @@ jobs:
 
         chmod +x custom-stage/prerun.sh
 
-        # Copy the Ansible playbook and related files to the custom stage
-        cp ansible-playbook.yml custom-stage/
+        # Copy Ansible playbook from the repository to the image
+        cp -r ansible custom-stage/
         cp -r scripts config custom-stage/
 
     - name: Build Raspberry Pi Image
