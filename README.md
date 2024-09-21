@@ -12,4 +12,3 @@ graph TD
     H[System Startup] -->|Initialize| B
     H -->|Initialize| C
     H -->|Initialize| D
-```
