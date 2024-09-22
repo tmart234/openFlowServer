@@ -17,3 +17,4 @@ qemu/custom-cron-raspios.zip
 qemu/kernel8.img
 qemu/bcm2710-rpi-zero-2-w.dtb
 /qemu
+*.pyc

@@ -9,18 +9,23 @@ from tqdm import tqdm
 import tempfile
 
 # Set up logging
-logging.basicConfig(filename='/var/log/openflow_cron.log', level=logging.INFO,
+LOG_PATH = os.getenv('OPENFLOW_LOG_PATH', '/var/log/openflow_cron.log')
+DB_PATH = os.getenv('OPENFLOW_DB_PATH', '/var/lib/openflow/data.db')
+
+# Ensure the directory for the log file exists
+os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+
+logging.basicConfig(filename=LOG_PATH, level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-DB_PATH = '/var/lib/openflow/data.db'
 
 def authenticate():
     try:
         auth = earthaccess.login(strategy="environment")
-        print("Successfully authenticated with NASA Earthdata")
+        logging.info("Successfully authenticated with NASA Earthdata")
         return auth
     except Exception as e:
-        print(f"Authentication failed: {str(e)}")
+        logging.error(f"Authentication failed: {str(e)}")
         raise
 
 def search_vegdri_dataset():
@@ -29,10 +34,10 @@ def search_vegdri_dataset():
             short_name="VegDRI",
             cloud_hosted=True
         )
-        print(f"Found {len(results)} VegDRI dataset results")
+        logging.info(f"Found {len(results)} VegDRI dataset results")
         return results
     except Exception as e:
-        print(f"Error searching for VegDRI dataset: {str(e)}")
+        logging.error(f"Error searching for VegDRI dataset: {str(e)}")
         raise
 
 def find_date_range(results):
