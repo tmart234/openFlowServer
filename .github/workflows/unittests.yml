@@ -32,4 +32,4 @@ jobs:
             EARTHDATA_USERNAME: ${{ secrets.EARTHDATA_USERNAME }}
             EARTHDATA_PASSWORD: ${{ secrets.EARTHDATA_PASSWORD }}
           run: |
-            python -m unittest discover -v -s scripts/tests -p "test_*.py"
+            python -m unittest discover -v -s ./scripts/tests -p "*_test.py"
