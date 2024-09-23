@@ -5,6 +5,8 @@ import os
 import tempfile
 import shutil
 import logging
+from datetime import datetime, timedelta
+import earthaccess
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,11 +29,12 @@ class TestOpenFlowCron(unittest.TestCase):
             os.environ['EARTHDATA_USERNAME'] = 'mock_username'
         if 'EARTHDATA_PASSWORD' not in os.environ:
             os.environ['EARTHDATA_PASSWORD'] = 'mock_password'
-        
-        
-        # Now import openflow_cron after setting the environment variables
+       
         global openflow_cron
         import openflow_cron
+        # Authenticate with earthaccess
+        self.auth = earthaccess.login(strategy="environment")
+
 
     def tearDown(self):
         # Close all logging handlers
@@ -70,20 +73,19 @@ class TestOpenFlowCron(unittest.TestCase):
             openflow_cron.authenticate()
 
     @patch('openflow_cron.earthaccess.search_datasets')
-    def test_search_vegdri_dataset(self, mock_search_datasets):
-        # Setup
-        mock_results = [MagicMock(), MagicMock()]
-        mock_search_datasets.return_value = mock_results
-
-        # Execute
-        result = openflow_cron.search_vegdri_dataset()
-
-        # Assert
-        mock_search_datasets.assert_called_once_with(
-            short_name="VegDRI",
-            cloud_hosted=True
-        )
-        self.assertEqual(result, mock_results)
+    def test_search_vegdri_dataset(self):
+        results = openflow_cron.search_vegdri_dataset()
+        self.assertIsNotNone(results)
+        self.assertTrue(len(results) > 0)
+        print(f"Found {len(results)} VegDRI dataset results")
+        
+        # Print details of the first few results
+        for i, result in enumerate(results[:5]):  # Print details of first 5 results
+            print(f"\nDataset {i+1}:")
+            print(f"Short Name: {result.short_name}")
+            print(f"Version: {result.version}")
+            print(f"Time Start: {result.time_start}")
+            print(f"Time End: {result.time_end}")
 
     @patch('openflow_cron.earthaccess.search_datasets')
     def test_search_vegdri_dataset_failure(self, mock_search_datasets):
@@ -93,6 +95,35 @@ class TestOpenFlowCron(unittest.TestCase):
         # Execute and Assert
         with self.assertRaises(Exception):
             openflow_cron.search_vegdri_dataset()
+
+    def test_find_date_range_vegdri(self):
+        results = openflow_cron.search_vegdri_dataset()
+        start_date, end_date = openflow_cron.find_date_range(results)
+        
+        self.assertIsNotNone(start_date)
+        self.assertIsNotNone(end_date)
+        
+        print(f"\nVegDRI dataset date range: {start_date} to {end_date}")
+        
+        # Check for data 8 days ago
+        eight_days_ago = (datetime.now() - timedelta(days=8)).strftime("%Y-%m-%d")
+        self.assertTrue(self._data_exists_for_date(results, eight_days_ago))
+        print(f"Data exists for 8 days ago: {eight_days_ago}")
+        
+        # Check for data 10 years ago
+        ten_years_ago = (datetime.now() - timedelta(days=3650)).strftime("%Y-%m-%d")
+        self.assertTrue(self._data_exists_for_date(results, ten_years_ago))
+        print(f"Data exists for 10 years ago: {ten_years_ago}")
+
+    def _data_exists_for_date(self, results, target_date):
+        target_date = datetime.strptime(target_date, "%Y-%m-%d")
+        for result in results:
+            start_date = datetime.strptime(result.time_start, "%Y-%m-%dT%H:%M:%S.%fZ")
+            end_date = datetime.strptime(result.time_end, "%Y-%m-%dT%H:%M:%S.%fZ")
+            if start_date <= target_date <= end_date:
+                return True
+        return False
+
 
 if __name__ == '__main__':
     unittest.main()
