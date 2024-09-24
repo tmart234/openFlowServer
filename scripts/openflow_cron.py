@@ -29,28 +29,38 @@ def authenticate():
         raise
 
 def search_vegdri_dataset():
-    try:
-        logging.info("Searching for VegDRI dataset...")
-        results = earthaccess.search_datasets(
-            short_name="VegDRI",
-            cloud_hosted=True
-        )
-        logging.info(f"Search completed. Found {len(results)} VegDRI dataset results")
-        if len(results) == 0:
-            logging.warning("No VegDRI datasets found. This may indicate an issue with search parameters or data availability.")
-        else:
-            for i, result in enumerate(results[:5]):
-                logging.info(f"Dataset {i+1}:")
-                logging.info(f"  Short Name: {result.short_name}")
-                logging.info(f"  Version: {result.version}")
-                logging.info(f"  Time Start: {result.time_start}")
-                logging.info(f"  Time End: {result.time_end}")
-        return results
-    except Exception as e:
-        logging.error(f"Error searching for VegDRI dataset: {str(e)}")
-        logging.error(f"Error type: {type(e).__name__}")
-        logging.error(f"Error args: {e.args}")
-        raise
+    search_attempts = [
+        {"short_name": "VegDRI", "cloud_hosted": True},
+        {"keyword": "Vegetation Drought Response Index", "cloud_hosted": True},
+        {"short_name": "VegDRI"},
+        {"keyword": "Vegetation Drought Response Index"},
+        {"short_name": "VegDRI", "temporal": ("2000-01-01", datetime.now().strftime("%Y-%m-%d"))}
+    ]
+
+    for attempt, params in enumerate(search_attempts, 1):
+        try:
+            logging.info(f"Searching for VegDRI dataset (Attempt {attempt})...")
+            logging.info(f"Search parameters: {params}")
+            results = earthaccess.search_datasets(**params)
+            logging.info(f"Search completed. Found {len(results)} VegDRI dataset results")
+            
+            if len(results) > 0:
+                for i, result in enumerate(results[:5]):
+                    logging.info(f"Dataset {i+1}:")
+                    logging.info(f"  Short Name: {result.short_name}")
+                    logging.info(f"  Version: {result.version}")
+                    logging.info(f"  Time Start: {result.time_start}")
+                    logging.info(f"  Time End: {result.time_end}")
+                return results
+            else:
+                logging.warning(f"No VegDRI datasets found in attempt {attempt}.")
+        except Exception as e:
+            logging.error(f"Error searching for VegDRI dataset (Attempt {attempt}): {str(e)}")
+            logging.error(f"Error type: {type(e).__name__}")
+            logging.error(f"Error args: {e.args}")
+
+    logging.error("All search attempts for VegDRI dataset failed.")
+    return []
 
 def find_date_range(results):
     if not results:

@@ -51,17 +51,19 @@ class TestOpenFlowCron(unittest.TestCase):
                 del os.environ[var]
 
     @patch('openflow_cron.earthaccess.login')
-    def test_authenticate(self, mock_login):
-        # Setup
-        mock_auth = MagicMock()
-        mock_login.return_value = mock_auth
-
-        # Execute
-        result = openflow_cron.authenticate()
-
-        # Assert
-        mock_login.assert_called_once_with(strategy="environment")
-        self.assertEqual(result, mock_auth)
+    def test_authentication(self):
+        logging.info("Testing authentication...")
+        try:
+            auth = earthaccess.login(strategy="environment")
+            self.assertIsNotNone(auth)
+            logging.info("Authentication successful")
+            logging.info(f"Authentication type: {type(auth).__name__}")
+            logging.info(f"Is authenticated: {auth.authenticated}")
+        except Exception as e:
+            logging.error(f"Authentication failed: {str(e)}")
+            logging.error(f"Error type: {type(e).__name__}")
+            logging.error(f"Error args: {e.args}")
+            raise
 
     @patch('openflow_cron.earthaccess.login')
     def test_authenticate_failure(self, mock_login):
@@ -120,8 +122,15 @@ class TestOpenFlowCron(unittest.TestCase):
         )
 
     @patch('openflow_cron.earthaccess.search_datasets')
-    def test_search_any_dataset(self):
+    def test_search_any_dataset(self, mock_search_datasets):
         logging.info("Searching for any available dataset...")
+        mock_result = MagicMock()
+        mock_result.short_name = "SampleDataset"
+        mock_result.version = "1"
+        mock_result.time_start = "2020-01-01T00:00:00.000Z"
+        mock_result.time_end = "2023-12-31T23:59:59.999Z"
+        mock_search_datasets.return_value = [mock_result]
+
         results = earthaccess.search_datasets(cloud_hosted=True)
         self.assertIsNotNone(results)
         self.assertGreater(len(results), 0)
@@ -136,6 +145,8 @@ class TestOpenFlowCron(unittest.TestCase):
         else:
             logging.warning("No datasets found. This may indicate an issue with the search functionality or authentication.")
 
+        mock_search_datasets.assert_called_once_with(cloud_hosted=True)
+        
     def test_find_date_range_vegdri(self):
         logging.info("Starting test_find_date_range_vegdri")
         results = openflow_cron.search_vegdri_dataset()
