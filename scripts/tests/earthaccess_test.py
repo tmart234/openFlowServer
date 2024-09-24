@@ -86,7 +86,7 @@ class TestOpenFlowCron(unittest.TestCase):
             print(f"Version: {result.version}")
             print(f"Time Start: {result.time_start}")
             print(f"Time End: {result.time_end}")
-            
+
     @patch('openflow_cron.earthaccess.search_datasets')
     def test_search_vegdri_dataset(self, mock_search_datasets):
         # Mock the search_datasets method to return some dummy results
@@ -119,30 +119,51 @@ class TestOpenFlowCron(unittest.TestCase):
             cloud_hosted=True
         )
 
+    @patch('openflow_cron.earthaccess.search_datasets')
+    def test_search_any_dataset(self):
+        logging.info("Searching for any available dataset...")
+        results = earthaccess.search_datasets(cloud_hosted=True)
+        self.assertIsNotNone(results)
+        self.assertGreater(len(results), 0)
+        logging.info(f"Found {len(results)} datasets")
+        if len(results) > 0:
+            for i, result in enumerate(results[:5]):
+                logging.info(f"Dataset {i+1}:")
+                logging.info(f"  Short Name: {result.short_name}")
+                logging.info(f"  Version: {result.version}")
+                logging.info(f"  Time Start: {result.time_start}")
+                logging.info(f"  Time End: {result.time_end}")
+        else:
+            logging.warning("No datasets found. This may indicate an issue with the search functionality or authentication.")
+
     def test_find_date_range_vegdri(self):
+        logging.info("Starting test_find_date_range_vegdri")
         results = openflow_cron.search_vegdri_dataset()
+        logging.info(f"search_vegdri_dataset returned {len(results)} results")
         start_date, end_date = openflow_cron.find_date_range(results)
         
-        print(f"\nVegDRI dataset date range: {start_date} to {end_date}")
+        logging.info(f"VegDRI dataset date range: {start_date} to {end_date}")
         
         if start_date is None or end_date is None:
-            print("No date range found. This could be due to no datasets being returned.")
+            logging.warning("No date range found. This could be due to no datasets being returned.")
             return
         
         # Check for data 8 days ago
         eight_days_ago = (datetime.now() - timedelta(days=8)).strftime("%Y-%m-%d")
         has_recent_data = self._data_exists_for_date(results, eight_days_ago)
-        print(f"Data exists for 8 days ago ({eight_days_ago}): {has_recent_data}")
+        logging.info(f"Data exists for 8 days ago ({eight_days_ago}): {has_recent_data}")
         
         # Check for data 10 years ago
         ten_years_ago = (datetime.now() - timedelta(days=3650)).strftime("%Y-%m-%d")
         has_old_data = self._data_exists_for_date(results, ten_years_ago)
-        print(f"Data exists for 10 years ago ({ten_years_ago}): {has_old_data}")
+        logging.info(f"Data exists for 10 years ago ({ten_years_ago}): {has_old_data}")
 
         # Only assert if we actually found data
         if len(results) > 0:
             self.assertTrue(has_recent_data or has_old_data, "Expected to find data either 8 days ago or 10 years ago")
-
+        else:
+            logging.warning("No results found, skipping assertions")
+            
     def _data_exists_for_date(self, results, target_date):
         target_date = datetime.strptime(target_date, "%Y-%m-%d")
         for result in results:

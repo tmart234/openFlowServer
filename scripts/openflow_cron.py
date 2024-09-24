@@ -30,13 +30,21 @@ def authenticate():
 
 def search_vegdri_dataset():
     try:
+        logging.info("Searching for VegDRI dataset...")
         results = earthaccess.search_datasets(
             short_name="VegDRI",
             cloud_hosted=True
         )
-        logging.info(f"Found {len(results)} VegDRI dataset results")
+        logging.info(f"Search completed. Found {len(results)} VegDRI dataset results")
         if len(results) == 0:
             logging.warning("No VegDRI datasets found. This may indicate an issue with search parameters or data availability.")
+        else:
+            for i, result in enumerate(results[:5]):
+                logging.info(f"Dataset {i+1}:")
+                logging.info(f"  Short Name: {result.short_name}")
+                logging.info(f"  Version: {result.version}")
+                logging.info(f"  Time Start: {result.time_start}")
+                logging.info(f"  Time End: {result.time_end}")
         return results
     except Exception as e:
         logging.error(f"Error searching for VegDRI dataset: {str(e)}")
