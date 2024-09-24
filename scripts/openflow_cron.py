@@ -35,9 +35,13 @@ def search_vegdri_dataset():
             cloud_hosted=True
         )
         logging.info(f"Found {len(results)} VegDRI dataset results")
+        if len(results) == 0:
+            logging.warning("No VegDRI datasets found. This may indicate an issue with search parameters or data availability.")
         return results
     except Exception as e:
         logging.error(f"Error searching for VegDRI dataset: {str(e)}")
+        logging.error(f"Error type: {type(e).__name__}")
+        logging.error(f"Error args: {e.args}")
         raise
 
 def find_date_range(results):

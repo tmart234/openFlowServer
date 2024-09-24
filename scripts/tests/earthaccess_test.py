@@ -86,11 +86,20 @@ class TestOpenFlowCron(unittest.TestCase):
             print(f"Version: {result.version}")
             print(f"Time Start: {result.time_start}")
             print(f"Time End: {result.time_end}")
-
+            
     @patch('openflow_cron.earthaccess.search_datasets')
-    def test_search_vegdri_dataset(self):
+    def test_search_vegdri_dataset(self, mock_search_datasets):
+        # Mock the search_datasets method to return some dummy results
+        mock_result = MagicMock()
+        mock_result.short_name = "VegDRI"
+        mock_result.version = "1"
+        mock_result.time_start = "2020-01-01T00:00:00.000Z"
+        mock_result.time_end = "2023-12-31T23:59:59.999Z"
+        mock_search_datasets.return_value = [mock_result]
+
         results = openflow_cron.search_vegdri_dataset()
         self.assertIsNotNone(results)
+        self.assertEqual(len(results), 1)
         print(f"Found {len(results)} VegDRI dataset results")
         
         if len(results) > 0:
@@ -103,6 +112,12 @@ class TestOpenFlowCron(unittest.TestCase):
                 print(f"Time End: {result.time_end}")
         else:
             print("No VegDRI datasets found. Please check your search criteria and authentication.")
+
+        # Assert that the search_datasets method was called with the correct parameters
+        mock_search_datasets.assert_called_once_with(
+            short_name="VegDRI",
+            cloud_hosted=True
+        )
 
     def test_find_date_range_vegdri(self):
         results = openflow_cron.search_vegdri_dataset()
