@@ -50,6 +50,7 @@ class TestOpenFlowCron(unittest.TestCase):
             if var in os.environ:
                 del os.environ[var]
 
+    @patch('openflow_cron.earthaccess.login')
     def test_authenticate(self, mock_login):
         # Setup
         mock_auth = MagicMock()
@@ -62,6 +63,7 @@ class TestOpenFlowCron(unittest.TestCase):
         mock_login.assert_called_once_with(strategy="environment")
         self.assertEqual(result, mock_auth)
 
+    @patch('openflow_cron.earthaccess.login')
     def test_authenticate_failure(self, mock_login):
         # Setup
         mock_login.side_effect = Exception("Authentication failed")
@@ -70,6 +72,7 @@ class TestOpenFlowCron(unittest.TestCase):
         with self.assertRaises(Exception):
             openflow_cron.authenticate()
 
+    @patch('openflow_cron.earthaccess.search_datasets')
     def test_search_vegdri_dataset(self):
         results = openflow_cron.search_vegdri_dataset()
         self.assertIsNotNone(results)
@@ -84,6 +87,7 @@ class TestOpenFlowCron(unittest.TestCase):
             print(f"Time Start: {result.time_start}")
             print(f"Time End: {result.time_end}")
 
+    @patch('openflow_cron.earthaccess.search_datasets')
     def test_search_vegdri_dataset(self):
         results = openflow_cron.search_vegdri_dataset()
         self.assertIsNotNone(results)
