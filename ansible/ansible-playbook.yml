@@ -6,7 +6,8 @@
     api_service_name: openflow_api_service
     api_script_path: /usr/local/bin/openflow_api.py
     cron_script_path: /usr/local/bin/openflow_cron.py
-    db_path: /var/lib/openflow/data.db
+    SMAP_DB_PATH: os.getenv('OPENFLOW_SMAP_DB_PATH', '/var/lib/openflow/smap_data.db')
+    VEGDRI_DB_PATH: os.getenv('OPENFLOW_VEGDRI_DB_PATH', '/var/lib/openflow/vegdri_data.db')
     earthdata_username: "{{ lookup('env', 'EARTHDATA_USERNAME') }}"
     earthdata_password: "{{ lookup('env', 'EARTHDATA_PASSWORD') }}"
 
@@ -40,10 +41,15 @@
         state: directory
         mode: '0755'
     
-    - name: Set up SQLite database
-      command: sqlite3 {{ db_path }} "CREATE TABLE IF NOT EXISTS processed_data (date TEXT, location TEXT, smap_value REAL, vegdri_value REAL);"
+    - name: Set up SMAP SQLite database
+      command: sqlite3 {{ SMAP_DB_PATH }} "CREATE TABLE IF NOT EXISTS smap_data (date TEXT, location TEXT, value REAL);"
       args:
-        creates: "{{ db_path }}"
+        creates: "{{ SMAP_DB_PATH }}"
+
+    - name: Set up VegDRI SQLite database
+      command: sqlite3 {{ VEGDRI_DB_PATH }} "CREATE TABLE IF NOT EXISTS vegdri_data (date TEXT, location TEXT, value REAL);"
+      args:
+        creates: "{{ VEGDRI_DB_PATH }}"
 
     - name: Copy API script
       copy:
@@ -57,13 +63,15 @@
         dest: "{{ cron_script_path }}"
         mode: '0755'
 
-    - name: Set up OpenFlow environment variables
+    - name: Set up OpenFlow's environment variables
       lineinfile:
         path: /etc/environment
         line: "{{ item }}"
       loop:
         - "EARTHDATA_USERNAME={{ earthdata_username }}"
         - "EARTHDATA_PASSWORD={{ earthdata_password }}"
+        - "VEGDRI_DB_PATH" = {{ VEGDRI_DB_PATH }}
+        - "SMAP_DB_PATH" = {{ SMAP_DB_PATH }}
 
     - name: Set up cron job for data download (SMAP + VegDRI)
       cron:
