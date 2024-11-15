@@ -1,6 +1,7 @@
 import earthaccess
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Dict, Optional, Tuple
 
 """
 Soil moisture (SMAP)
@@ -10,8 +11,7 @@ Soil properties (IsricWise)
 Terrain (SRTM)
 """
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
 # Authentication
@@ -24,6 +24,9 @@ except Exception as e:
 class DatasetConfig:
     DYNAMIC = {
         "soil_moisture_l3": {
+class DatasetAnalyzer:
+    DYNAMIC_DATASETS = {
+        "soil_moisture": {
             "short_name": "SPL3SMP_E",
             "provider": "NSIDC_ECS",
             "version": "006"
@@ -32,13 +35,13 @@ class DatasetConfig:
             "short_name": "MOD10A1",
             "provider": "NSIDC_ECS"
         },
-        "vegetation_indices": {
+        "vegetation": {
             "short_name": "MOD13Q1",
             "provider": "LPCLOUD"
         }
     }
     
-    STATIC = {
+    STATIC_DATASETS = {
         "elevation": {
             "short_name": "SRTMGL1",
             "provider": "LPCLOUD"
@@ -49,113 +52,53 @@ class DatasetConfig:
         }
     }
 
-def search_dynamic_datasets():
-    """Search for dynamic (frequently updated) datasets"""
-    logger.info("\nSearching DYNAMIC Datasets:")
-    found_datasets = {}
-    
-    for data_type, params in DatasetConfig.DYNAMIC.items():
-        try:
-            logger.info(f"\nSearching for {data_type}...")
-            datasets = earthaccess.search_datasets(**params)
-            
-            if datasets:
-                found_datasets[data_type] = datasets
-                logger.info(f"Found {len(datasets)} datasets")
-                for dataset in datasets:
-                    logger.info(f"Dataset: {dataset.get_umm('ShortName')}")
-                    logger.info(f"Concept ID: {dataset.concept_id()}")
-                    logger.info(f"Version: {dataset.version()}")
-                    logger.info(f"Cloud hosted: {'Yes' if dataset.s3_bucket() else 'No'}")
-            else:
-                logger.info(f"No datasets found for {data_type}")
-                
-        except Exception as e:
-            logger.error(f"Error searching for {data_type}: {e}")
-            
-    return found_datasets
+    def __init__(self):
+        self.auth = earthaccess.login(strategy="environment")
+        logger.info("Authenticated with NASA Earthdata")
 
-def search_static_datasets():
-    """Search for static (unchanging) datasets"""
-    logger.info("\nSearching STATIC Datasets:")
-    found_datasets = {}
-    
-    for data_type, params in DatasetConfig.STATIC.items():
-        try:
-            logger.info(f"\nSearching for {data_type}...")
-            datasets = earthaccess.search_datasets(**params)
+    def get_dataset_period(self, name: str, params: Dict) -> Optional[Tuple[datetime, datetime]]:
+        """Get start and end dates for a dataset using collection metadata"""
+        dataset = earthaccess.search_datasets(**params)
+        if not dataset:
+            logger.warning(f"Dataset not found: {name}")
+            return None
             
-            if datasets:
-                found_datasets[data_type] = datasets
-                logger.info(f"Found {len(datasets)} datasets")
-                for dataset in datasets:
-                    logger.info(f"Dataset: {dataset.get_umm('ShortName')}")
-                    logger.info(f"Concept ID: {dataset.concept_id()}")
-                    logger.info(f"Version: {dataset.version()}")
-            else:
-                logger.info(f"No datasets found for {data_type}")
-                
-        except Exception as e:
-            logger.error(f"Error searching for {data_type}: {e}")
+        collection = dataset[0]
+        temporal = collection.get_umm('TemporalExtents')
+        
+        if not temporal or not temporal[0].get('RangeDateTimes'):
+            return None
             
-    return found_datasets
+        range_dates = temporal[0]['RangeDateTimes'][0]
+        start = datetime.strptime(range_dates['BeginningDateTime'][:10], '%Y-%m-%d')
+        
+        if range_dates.get('EndingDateTime'):
+            end = datetime.strptime(range_dates['EndingDateTime'][:10], '%Y-%m-%d')
+        else:
+            end = datetime.now()
+            
+        return start, end
 
-def get_recent_data(dynamic_datasets, days_back=30, bounding_box=None):
-    """Get recent data for dynamic datasets"""
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days_back)
-    
-    logger.info(f"\nSearching for data between {start_date.date()} and {end_date.date()}")
-    recent_data = {}
-    
-    for data_type, datasets in dynamic_datasets.items():
-        if datasets:
-            dataset = datasets[0]
-            try:
-                search_params = {
-                    "concept_id": dataset.concept_id(),
-                    "temporal": (start_date.strftime("%Y-%m-%d"), 
-                               end_date.strftime("%Y-%m-%d"))
-                }
-                
-                if bounding_box:
-                    search_params["bounding_box"] = bounding_box
-                
-                granules = earthaccess.search_data(**search_params)
-                
-                if granules:  # Check if granules exist before accessing
-                    recent_data[data_type] = granules
-                    logger.info(f"\nFound {len(granules)} granules for {data_type}")
-                    logger.info(f"Sample granule size: {granules[0].size():.2f} MB")
-                else:
-                    logger.warning(f"\nNo granules found for {data_type} between {start_date.date()} and {end_date.date()}")
-                    if bounding_box:
-                        logger.warning(f"Check if {data_type} has coverage in specified bounding box")
-                    
-            except Exception as e:
-                logger.error(f"Error getting granules for {data_type}: {e}")
-                logger.debug(f"Full error: ", exc_info=True)  # Add detailed error info
-                
-    return recent_data
+    def print_coverage_summary(self):
+        """Print temporal coverage for all dynamic datasets"""
+        logger.info("\nDynamic Dataset Coverage Periods:")
+        logger.info("-" * 50)
+        
+        for name, params in self.DYNAMIC_DATASETS.items():
+            period = self.get_dataset_period(name, params)
+            if period:
+                start, end = period
+                years = (end - start).days / 365.25
+                logger.info(f"{name:15} {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')} ({years:.1f} years)")
+
+        logger.info("\nStatic Datasets:")
+        logger.info("-" * 50)
+        for name in self.STATIC_DATASETS:
+            logger.info(f"{name:15} (time-invariant)")
 
 def main():
-    # Example usage with bounding box for Colorado
-    colorado_bbox = (-109.0, 37.0, -102.0, 41.0)  # (min_lon, min_lat, max_lon, max_lat)
-
-    # Search for all datasets
-    dynamic_datasets = search_dynamic_datasets()
-    static_datasets = search_static_datasets()
-
-    # Get recent data for dynamic datasets
-    recent_data = get_recent_data(dynamic_datasets, days_back=30, bounding_box=colorado_bbox)
-
-    # Summarize data availability
-    logger.info("\nData Availability Summary:")
-    for data_type, granules in recent_data.items():
-        if granules:
-            logger.info(f"\n{data_type}:")
-            logger.info(f"Number of granules: {len(granules)}")
-            logger.info(f"Total size: {sum(g.size() for g in granules):.2f} MB")
+    analyzer = DatasetAnalyzer()
+    analyzer.print_coverage_summary()
 
 if __name__ == "__main__":
     main()
