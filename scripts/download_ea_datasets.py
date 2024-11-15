@@ -21,9 +21,7 @@ try:
 except Exception as e:
     logger.error(f"Authentication failed: {str(e)}")
     raise
-class DatasetConfig:
-    DYNAMIC = {
-        "soil_moisture_l3": {
+
 class DatasetAnalyzer:
     DYNAMIC_DATASETS = {
         "soil_moisture": {
