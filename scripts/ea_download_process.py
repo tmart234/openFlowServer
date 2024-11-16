@@ -5,13 +5,12 @@ from typing import Dict, Optional, Tuple, List
 from pathlib import Path
 import requests
 from dataclasses import dataclass
-from smapprocessor import SMAPProcessor
-import os
 
-import sqlite3
-#from smapprocessor import SMAPProcessor
+from smapprocessor import SMAPProcessor
+from init_dbs import setup_database, store_stations
 
 """
+Earthaccess datasets:
 Soil moisture (SMAP)
 Snow (MODIS)
 Vegetation (MODIS)
@@ -143,13 +142,11 @@ class DatasetAnalyzer:
         }
     }
 
-    def __init__(self, db_path: Path):
+    def __init__(self):
         self.auth = earthaccess.login(strategy="environment")
         logger.info("Authenticated with NASA Earthdata")
         self.common_start = None
         self.common_end = None
-        self.db_path = db_path
-        self.setup_database()
         # Get station pairs from site_ids.txt
         self.stations = self.create_stations()
         logger.debug(f"Created {len(self.stations)} stations")
@@ -253,110 +250,18 @@ class DatasetAnalyzer:
                 logger.warning(f"Could not get coordinates for {source}:{site_id}")
         
         return stations
-    
-    def setup_database(self):
-        """Initialize SQLite database tables for all datasets"""
-        logger.info(f"Setting up database at {self.db_path}")
-        
-        with sqlite3.connect(self.db_path) as conn:
-            # Create stations table
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS stations (
-                    id TEXT PRIMARY KEY,
-                    source TEXT NOT NULL,
-                    site_id TEXT NOT NULL,
-                    latitude REAL NOT NULL,
-                    longitude REAL NOT NULL,
-                    created_at INTEGER NOT NULL
-                )
-            ''')
-            
-            # Create soil moisture features table
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS smap_features (
-                    timestamp INTEGER,
-                    station_id TEXT,
-                    soil_moisture REAL,      -- Normalized soil moisture (0-1)
-                    quality_score INTEGER,    -- Overall quality (0-100)
-                    trend REAL,              -- 3-day trend
-                    PRIMARY KEY (timestamp, station_id),
-                    FOREIGN KEY (station_id) REFERENCES stations(id)
-                )
-            ''')
-            
-            # Create vegetation features table
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS vegetation_features (
-                    timestamp INTEGER,
-                    station_id TEXT,
-                    ndvi REAL,             -- Normalized Difference Vegetation Index
-                    quality_score INTEGER,  -- Quality indicator
-                    PRIMARY KEY (timestamp, station_id),
-                    FOREIGN KEY (station_id) REFERENCES stations(id)
-                )
-            ''')
-            
-            # Create snow cover features table
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS snow_features (
-                    timestamp INTEGER,
-                    station_id TEXT,
-                    snow_cover REAL,        -- Percent snow cover
-                    quality_score INTEGER,   -- Quality indicator
-                    PRIMARY KEY (timestamp, station_id),
-                    FOREIGN KEY (station_id) REFERENCES stations(id)
-                )
-            ''')
-            
-            # Create static features table
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS static_features (
-                    station_id TEXT PRIMARY KEY,
-                    elevation REAL,          -- Elevation in meters
-                    slope REAL,              -- Terrain slope
-                    soil_type TEXT,          -- Soil classification
-                    soil_texture TEXT,       -- Soil texture class
-                    organic_carbon REAL,     -- Soil organic carbon content
-                    clay_content REAL,       -- Clay percentage
-                    sand_content REAL,       -- Sand percentage
-                    FOREIGN KEY (station_id) REFERENCES stations(id)
-                )
-            ''')
-            
-            logger.info("Database tables created successfully")
-
-    def store_stations(self, stations: List[Station]):
-        """Store station information in the database"""
-        current_time = int(datetime.now().timestamp())
-        
-        with sqlite3.connect(self.db_path) as conn:
-            for station in stations:
-                source, site_id = station.id.split(':')
-                try:
-                    conn.execute('''
-                        INSERT OR REPLACE INTO stations 
-                        (id, source, site_id, latitude, longitude, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (
-                        station.id,
-                        source,
-                        site_id,
-                        station.latitude,
-                        station.longitude,
-                        current_time
-                    ))
-                    logger.info(f"Stored station {station.id} in database")
-                except Exception as e:
-                    logger.error(f"Error storing station {station.id}: {e}")
 
 def main():
     # Set up database path
     db_path = Path("data/earth_data.db")
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    analyzer = DatasetAnalyzer(db_path)
+    analyzer = DatasetAnalyzer()
     #analyzer.print_coverage_summary()
     common_start, common_end = analyzer.find_common_period()
+
+    setup_database(db_path)
+    store_stations(db_path, analyzer.stations)
     
     # Process SMAP data
     processor = SMAPProcessor(analyzer.stations, common_start, common_end)
