@@ -2,17 +2,12 @@ import sqlite3
 import logging
 from datetime import datetime
 from typing import List
-from dataclasses import dataclass
 from pathlib import Path
+
+from stations import Station
+
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class Station:
-    """Single station location data"""
-    id: str
-    latitude: float
-    longitude: float
 
 def check_database_structure(conn: sqlite3.Connection) -> bool:
     """Check if database has all required tables with correct schema"""
@@ -126,11 +121,11 @@ def setup_database(db_path: Path):
         logger.info("Database tables created successfully")
 
 
-def store_stations(self, stations: List[Station]):
+def store_stations(stations: List[Station], db_path: Path):
     """Store station information in the database"""
     current_time = int(datetime.now().timestamp())
     
-    with sqlite3.connect(self.db_path) as conn:
+    with sqlite3.connect(db_path) as conn:
         for station in stations:
             source, site_id = station.id.split(':')
             try:

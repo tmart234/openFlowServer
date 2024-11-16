@@ -9,14 +9,9 @@ import h5py
 import earthaccess
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+from stations import Station
 
-@dataclass
-class Station:
-    """Single station location data"""
-    id: str
-    latitude: float
-    longitude: float
+logger = logging.getLogger(__name__)
 
 class SMAPProcessor:
     """Processor for SMAP soil moisture data"""

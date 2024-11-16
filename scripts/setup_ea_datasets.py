@@ -1,16 +1,17 @@
 import earthaccess
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Optional, Tuple, List
 from pathlib import Path
 import requests
 from dataclasses import dataclass
+from stations import Station, get_usgs_coordinates, get_dwr_coordinates
 
 from smapprocessor import SMAPProcessor
 from init_dbs import setup_database, store_stations
 
 """
-Earthaccess datasets:
+Earthaccess only datasets:
 Soil moisture (SMAP)
 Snow (MODIS)
 Vegetation (MODIS)
@@ -18,99 +19,9 @@ Soil properties (IsricWise)
 Terrain (SRTM)
 """
 
-@dataclass
-class Station:
-    """Single station location data"""
-    id: str
-    latitude: float
-    longitude: float
-
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
-
-def get_usgs_coordinates(site_number: str) -> Optional[Dict]:
-    """Get coordinates for a USGS station"""
-    base_url = "https://waterdata.usgs.gov/nwis/inventory"
-    params = {
-        'search_site_no': site_number,
-        'search_site_no_match_type': 'exact',
-        'group_key': 'NONE',
-        'format': 'sitefile_output',
-        'sitefile_output_format': 'rdb',
-        'column_name': 'site_no,station_nm,dec_lat_va,dec_long_va',  # Fixed: Changed list to comma-separated string
-        'list_of_search_criteria': 'search_site_no'
-    }
-    
-    full_url = requests.Request('GET', base_url, params=params).prepare().url
-    logger.info(f"Fetching USGS coordinates - URL: {full_url}")
-    
-    response = requests.get(base_url, params=params)
-    lines = response.text.splitlines()
-    
-    try:
-        data_lines = [line for line in lines if not line.startswith('#')]
-        if len(data_lines) < 3:
-            logger.warning(f"No data found for USGS site {site_number}")
-            return None
-        
-        data = next((line for line in data_lines[2:] if line.split('\t')[0] == site_number), None)
-        if data is None:
-            logger.warning(f"Site number {site_number} not found in response")
-            return None
-            
-        fields = data.split('\t')
-        coordinates = {
-            'latitude': float(fields[2]),
-            'longitude': float(fields[3])
-        }
-        logger.info(f"Found USGS coordinates for site {site_number}: lat={coordinates['latitude']}, lon={coordinates['longitude']}")
-        return coordinates
-        
-    except Exception as e:
-        logger.error(f"Error getting USGS coordinates for {site_number}: {e}")
-        return None
-    
-def get_dwr_coordinates(abbrev: str) -> Optional[Dict]:
-    """Get coordinates for a DWR station"""
-    base_url = "https://dwr.state.co.us/Rest/GET/api/v2/surfacewater/surfacewaterstations"
-    params = {
-        "format": "json",
-        "dateFormat": "dateOnly",
-        "fields": "abbrev,longitude,latitude",
-        "encoding": "deflate",
-        "abbrev": abbrev,
-    }
-    
-    full_url = f"{base_url}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
-    logger.info(f"Fetching DWR coordinates - URL: {full_url}")
-    
-    try:
-        response = requests.get(base_url, params=params)
-        response.raise_for_status()  # Will raise an exception for non-200 status codes
-        data = response.json()
-        
-        if not data.get('ResultList') or len(data['ResultList']) == 0:
-            logger.warning(f"No data found for DWR station {abbrev}")
-            return None
-            
-        station = data['ResultList'][0]
-        coordinates = {
-            'latitude': float(station['latitude']),
-            'longitude': float(station['longitude'])
-        }
-        logger.info(f"Found DWR coordinates for station {abbrev}: lat={coordinates['latitude']}, lon={coordinates['longitude']}")
-        return coordinates
-        
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Request failed for DWR station {abbrev}: {e}")
-        return None
-    except (KeyError, ValueError, IndexError) as e:
-        logger.error(f"Error parsing response for DWR station {abbrev}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error getting DWR coordinates for {abbrev}: {e}")
-        return None
 
 class DatasetAnalyzer:
     SITE_IDS_URL = "https://raw.githubusercontent.com/tmart234/OpenFlow/refs/heads/dev/.github/site_ids.txt"
@@ -261,8 +172,8 @@ def main():
     common_start, common_end = analyzer.find_common_period()
 
     setup_database(db_path)
-    store_stations(db_path, analyzer.stations)
-    
+    store_stations(analyzer.stations, db_path)
+
     # Process SMAP data
     processor = SMAPProcessor(analyzer.stations, common_start, common_end)
     SMAPProcessor.readout(db_path)
