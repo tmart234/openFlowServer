@@ -8,6 +8,7 @@ from stations import Station, get_usgs_coordinates, get_dwr_coordinates
 import os
 
 #from smapprocessor import SMAPProcessor
+from soilgrids import SoilGridsProcessor
 from staticprocessor import StaticProcessor
 from init_dbs import setup_database, store_stations
 
@@ -185,8 +186,13 @@ def main():
     #SMAPProcessor.readout(db_path)
 
     # Process Static datasets
-    StaticProcessor(analyzer.stations)
-    StaticProcessor.readout(db_path)
+    #StaticProcessor(analyzer.stations)
+    #StaticProcessor.readout(db_path)
+    processor = SoilGridsProcessor(analyzer.stations)
+    soil_data = processor.process_soil_properties()
+        
+    # Show results
+    processor.readout(soil_data)
 
 if __name__ == "__main__":
     main()
