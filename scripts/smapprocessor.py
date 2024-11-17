@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Tuple, Dict
 import h5py
 import earthaccess
-from dataclasses import dataclass
 
 from stations import Station
 
@@ -17,7 +16,7 @@ class SMAPProcessor:
     """Processor for SMAP soil moisture data"""
     
     def __init__(self, stations: List[Station], start_date: datetime, end_date: datetime, 
-                radius_km: float = 5.0, 
+                radius_km: float = 7.0, 
                 frozen_soil_threshold: float = 273.15,
                 chunk_size: int = 50, # Number of pixels to process at once
                 vegetation_threshold: float = 5.0,

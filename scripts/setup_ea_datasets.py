@@ -4,10 +4,11 @@ from datetime import datetime
 from typing import Dict, Optional, Tuple, List
 from pathlib import Path
 import requests
-from dataclasses import dataclass
 from stations import Station, get_usgs_coordinates, get_dwr_coordinates
+import os
 
-from smapprocessor import SMAPProcessor
+#from smapprocessor import SMAPProcessor
+from staticprocessor import StaticProcessor
 from init_dbs import setup_database, store_stations
 
 """
@@ -164,19 +165,28 @@ class DatasetAnalyzer:
 
 def main():
     # Set up database path
-    db_path = Path("data/earth_data.db")
+    if (os.getenv('OPENFLOW_SQL_PATH')):
+        db_path = os.getenv('OPENFLOW_SQL_PATH')
+    else:
+        db_path = Path("data/earth_data.db")
+
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     analyzer = DatasetAnalyzer()
     #analyzer.print_coverage_summary()
     common_start, common_end = analyzer.find_common_period()
 
+
     setup_database(db_path)
     store_stations(analyzer.stations, db_path)
+    
+    # Process SMAP dataset
+    #SMAPProcessor(analyzer.stations, common_start, common_end)
+    #SMAPProcessor.readout(db_path)
 
-    # Process SMAP data
-    processor = SMAPProcessor(analyzer.stations, common_start, common_end)
-    SMAPProcessor.readout(db_path)
+    # Process Static datasets
+    StaticProcessor(analyzer.stations)
+    StaticProcessor.readout(db_path)
 
 if __name__ == "__main__":
     main()

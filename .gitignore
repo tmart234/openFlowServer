@@ -19,3 +19,4 @@ qemu/bcm2710-rpi-zero-2-w.dtb
 /qemu
 *.pyc
 /temp_smap
+/data

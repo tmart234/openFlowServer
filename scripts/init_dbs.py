@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 def check_database_structure(conn: sqlite3.Connection) -> bool:
     """Check if database has all required tables with correct schema"""
     expected_tables = {
-        'stations': ['id', 'source', 'site_id', 'latitude', 'longitude', 'created_at'],
+        'stations': ['id', 'source', 'site_id', 'latitude', 'longitude', 'created_at',
+                    'elevation', 'slope', 'soil_type', 'soil_texture', 
+                    'organic_carbon', 'clay_content', 'sand_content'],
         'smap_features': ['timestamp', 'station_id', 'soil_moisture', 'quality_flag', 'trend3', 'source'],
         'vegetation_features': ['timestamp', 'station_id', 'ndvi', 'quality_score'],
-        'snow_features': ['timestamp', 'station_id', 'snow_cover', 'quality_score'],
-        'static_features': ['station_id', 'elevation', 'slope', 'soil_type', 'soil_texture', 
-                          'organic_carbon', 'clay_content', 'sand_content']
+        'snow_features': ['timestamp', 'station_id', 'snow_cover', 'quality_score']
     }
     
     try:
@@ -51,9 +51,15 @@ def setup_database(db_path: Path):
                 logger.info("Database structure verified")
                 return
             else:
-                logger.warning("Database exists but structure is incorrect. Recreating tables...")
+                logger.warning("Database exists but structure is incorrect. Dropping and recreating tables...")
+                # Drop existing tables in correct order (due to foreign keys)
+                conn.execute("DROP TABLE IF EXISTS smap_features")
+                conn.execute("DROP TABLE IF EXISTS vegetation_features")
+                conn.execute("DROP TABLE IF EXISTS snow_features")
+                conn.execute("DROP TABLE IF EXISTS static_features")
+                conn.execute("DROP TABLE IF EXISTS stations")
         
-        # Create stations table
+        # Create combined stations table with static features
         conn.execute('''
             CREATE TABLE IF NOT EXISTS stations (
                 id TEXT PRIMARY KEY,
@@ -61,7 +67,14 @@ def setup_database(db_path: Path):
                 site_id TEXT NOT NULL,
                 latitude REAL NOT NULL,
                 longitude REAL NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                elevation REAL DEFAULT 0.0,          -- Elevation in meters
+                slope REAL DEFAULT 0.0,              -- Terrain slope
+                soil_type TEXT DEFAULT 'UNKNOWN',    -- Soil classification
+                soil_texture TEXT DEFAULT 'UNKNOWN', -- Soil texture class
+                organic_carbon REAL DEFAULT 0.0,     -- Soil organic carbon content
+                clay_content REAL DEFAULT 0.0,       -- Clay percentage
+                sand_content REAL DEFAULT 0.0        -- Sand percentage
             )
         ''')
         
@@ -73,7 +86,7 @@ def setup_database(db_path: Path):
                 soil_moisture REAL,      -- Normalized soil moisture (0-1)
                 quality_flag INTEGER,    -- Original SMAP quality flag (0-1)
                 trend3 REAL,             -- 3-day trend
-                source INTEGER,         -- Binary: 0=L3, 1=L4
+                source INTEGER,          -- Binary: 0=L3, 1=L4
                 PRIMARY KEY (timestamp, station_id),
                 FOREIGN KEY (station_id) REFERENCES stations(id)
             )
@@ -103,26 +116,11 @@ def setup_database(db_path: Path):
             )
         ''')
         
-        # Create static features table
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS static_features (
-                station_id TEXT PRIMARY KEY,
-                elevation REAL,          -- Elevation in meters
-                slope REAL,              -- Terrain slope
-                soil_type TEXT,          -- Soil classification
-                soil_texture TEXT,       -- Soil texture class
-                organic_carbon REAL,     -- Soil organic carbon content
-                clay_content REAL,       -- Clay percentage
-                sand_content REAL,       -- Sand percentage
-                FOREIGN KEY (station_id) REFERENCES stations(id)
-            )
-        ''')
-        
         logger.info("Database tables created successfully")
 
 
 def store_stations(stations: List[Station], db_path: Path):
-    """Store station information in the database"""
+    """Store basic station information in the database"""
     current_time = int(datetime.now().timestamp())
     
     with sqlite3.connect(db_path) as conn:
@@ -131,8 +129,10 @@ def store_stations(stations: List[Station], db_path: Path):
             try:
                 conn.execute('''
                     INSERT OR REPLACE INTO stations 
-                    (id, source, site_id, latitude, longitude, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    (id, source, site_id, latitude, longitude, created_at,
+                     elevation, slope, soil_type, soil_texture, 
+                     organic_carbon, clay_content, sand_content)
+                    VALUES (?, ?, ?, ?, ?, ?, 0.0, 0.0, 'UNKNOWN', 'UNKNOWN', 0.0, 0.0, 0.0)
                 ''', (
                     station.id,
                     source,
